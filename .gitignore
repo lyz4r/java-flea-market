@@ -5,6 +5,21 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
+# Local tooling and bundled JDKs
+tools/
+*.tar.gz
+*.zip
+*.7z
+
+# Environment and secrets
+.env
+.env.*
+!env.example
+
+# Logs
+*.log
+logs/
+
 ### STS ###
 .apt_generated
 .classpath
