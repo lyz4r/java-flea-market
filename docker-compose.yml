@@ -1,20 +1,47 @@
+version: '3.8'
+
 services:
   postgres:
-    image: postgres:15-alpine
+    image: postgres:16-alpine
     container_name: flea-market-postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: flea_market
-      POSTGRES_USER: flea_market
-      POSTGRES_PASSWORD: flea_market
-    ports:
-      - "5433:5432"
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    ports:
+      - "5432:5432"
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U flea_market -d flea_market" ]
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 5s
       timeout: 5s
       retries: 5
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0.0
+    container_name: flea-market-keycloak
+    restart: unless-stopped
+    command:
+      - start-dev
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak_db
+      KC_DB_USERNAME: keycloak_user
+      KC_DB_PASSWORD: keycloak_pass
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: 'true'
+    ports:
+      - "8081:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+
 volumes:
   postgres_data:
+  keycloak_data:
