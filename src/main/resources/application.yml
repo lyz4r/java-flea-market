@@ -3,9 +3,9 @@ spring:
     name: flea-market
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/flea_market_db
-    username: flea_market_user
-    password: flea_market_pass
+    url: jdbc:postgresql://localhost:5432/${FLEA_MARKET_DB:flea_market_db}
+    username: ${FLEA_MARKET_DB_USER:flea_market_user}
+    password: ${FLEA_MARKET_DB_PASSWORD:flea_market_pass}
     driver-class-name: org.postgresql.Driver
 
   jpa:
