@@ -4,10 +4,12 @@ CREATE TABLE IF NOT EXISTS ads (
     title VARCHAR(255) NOT NULL,
     description TEXT,
     price NUMERIC(19, 2),
+    price_is_numeric BOOLEAN NOT NULL,
+    price_text VARCHAR(255),
     status VARCHAR(32) NOT NULL,
     admin_deactivated BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL
 );
 
 CREATE INDEX idx_ads_status ON ads(status);
