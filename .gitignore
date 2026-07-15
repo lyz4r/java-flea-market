@@ -1,0 +1,37 @@
+# Gradle
+.gradle/
+build/
+HELP.md
+gradle/wrapper/gradle-wrapper.jar
+gradle/wrapper/gradle-wrapper.properties
+gradlew
+gradlew.bat
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+# VS Code
+.vscode/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Local tooling and bundled JDKs
+tools/
+*.tar.gz
+*.zip
+*.7z
+
+# Logs
+*.log
+logs/
