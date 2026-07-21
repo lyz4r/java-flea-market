@@ -8,8 +8,13 @@ import com.flea.market.common.NotFoundException;
 import com.flea.market.user.User;
 import com.flea.market.user.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
 
 @Service
 @RequiredArgsConstructor
@@ -70,6 +75,36 @@ public class AdService {
     public Ad findById(Long id) {
         return adRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Ad not found: " + id));
+    }
+
+    public Page<AdResponse> search(String title, String category, BigDecimal minPrice,
+                                   BigDecimal maxPrice, String authorLogin, Pageable pageable) {
+        if (minPrice != null && maxPrice != null && minPrice.compareTo(maxPrice) > 0) {
+            throw new BadRequestException("minPrice must not be greater than maxPrice");
+        }
+
+        Specification<Ad> spec = Specification.allOf(
+                AdSpecifications.hasStatus(AdStatus.ACTIVE),
+                AdSpecifications.titleContains(title),
+                AdSpecifications.hasCategory(category),
+                AdSpecifications.priceGte(minPrice),
+                AdSpecifications.priceLte(maxPrice),
+                AdSpecifications.hasAuthor(authorLogin));
+
+        return adRepository.findAll(spec, pageable).map(adMapper::toResponse);
+    }
+
+    public Page<AdResponse> getMyAds(String login, Pageable pageable) {
+        return adRepository.findAll(AdSpecifications.hasAuthor(login), pageable)
+                .map(adMapper::toResponse);
+    }
+
+    public AdResponse getById(Long id, String login) {
+        Ad ad = findById(id);
+        if (ad.getStatus() != AdStatus.ACTIVE && !ad.getAuthor().getLogin().equals(login)) {
+            throw new NotFoundException("Ad not found: " + id);
+        }
+        return adMapper.toResponse(ad);
     }
 
     private void validatePrice(AdRequest request) {

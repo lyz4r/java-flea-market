@@ -17,7 +17,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -190,5 +197,85 @@ class AdServiceTest {
 
         assertThatThrownBy(() -> adService.update(42L, numericPriceRequest(), "ivan"))
                 .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void search_minPriceGreaterThanMaxPrice_throwsBadRequest() {
+        assertThatThrownBy(() -> adService.search(null, null,
+                new BigDecimal("200"), new BigDecimal("100"), null,
+                PageRequest.of(0, 10)))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    void search_returnsMappedPage() {
+        Ad ad = existingAd(author());
+        Page<Ad> page = new PageImpl<>(List.of(ad), PageRequest.of(0, 10), 1);
+        when(adRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
+        AdResponse response = new AdResponse(10L, 1L, "ivan", "Old title", "Old description",
+                "Old category", new BigDecimal("100.00"), true, null, AdStatus.ACTIVE,
+                ad.getCreatedAt(), ad.getCreatedAt());
+        when(adMapper.toResponse(ad)).thenReturn(response);
+
+        Page<AdResponse> result = adService.search("old", "Old category",
+                new BigDecimal("50"), new BigDecimal("150"), "ivan", PageRequest.of(0, 10));
+
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        assertThat(result.getContent()).containsExactly(response);
+    }
+
+    @Test
+    void getMyAds_returnsMappedPage() {
+        Ad ad = existingAd(author());
+        ad.setStatus(AdStatus.INACTIVE);
+        Page<Ad> page = new PageImpl<>(List.of(ad), PageRequest.of(0, 10), 1);
+        when(adRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
+        AdResponse response = new AdResponse(10L, 1L, "ivan", "Old title", "Old description",
+                "Old category", new BigDecimal("100.00"), true, null, AdStatus.INACTIVE,
+                ad.getCreatedAt(), ad.getCreatedAt());
+        when(adMapper.toResponse(ad)).thenReturn(response);
+
+        Page<AdResponse> result = adService.getMyAds("ivan", PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).containsExactly(response);
+    }
+
+    @Test
+    void getById_activeAd_visibleToAnyone() {
+        Ad ad = existingAd(author());
+        when(adRepository.findById(10L)).thenReturn(Optional.of(ad));
+        when(adMapper.toResponse(ad)).thenReturn(
+                new AdResponse(10L, 1L, "ivan", "Old title", "Old description", "Old category",
+                        new BigDecimal("100.00"), true, null, AdStatus.ACTIVE,
+                        ad.getCreatedAt(), ad.getCreatedAt()));
+
+        AdResponse result = adService.getById(10L, "someone");
+
+        assertThat(result.id()).isEqualTo(10L);
+    }
+
+    @Test
+    void getById_inactiveAd_hiddenFromOthers() {
+        Ad ad = existingAd(author());
+        ad.setStatus(AdStatus.INACTIVE);
+        when(adRepository.findById(10L)).thenReturn(Optional.of(ad));
+
+        assertThatThrownBy(() -> adService.getById(10L, "someone"))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void getById_inactiveAd_visibleToAuthor() {
+        Ad ad = existingAd(author());
+        ad.setStatus(AdStatus.INACTIVE);
+        when(adRepository.findById(10L)).thenReturn(Optional.of(ad));
+        when(adMapper.toResponse(ad)).thenReturn(
+                new AdResponse(10L, 1L, "ivan", "Old title", "Old description", "Old category",
+                        new BigDecimal("100.00"), true, null, AdStatus.INACTIVE,
+                        ad.getCreatedAt(), ad.getCreatedAt()));
+
+        AdResponse result = adService.getById(10L, "ivan");
+
+        assertThat(result.status()).isEqualTo(AdStatus.INACTIVE);
     }
 }
