@@ -3,8 +3,10 @@ package com.flea.market.ad;
 import com.flea.market.ad.dto.AdRequest;
 import com.flea.market.ad.dto.AdResponse;
 import com.flea.market.common.BadRequestException;
+import com.flea.market.common.ConflictException;
 import com.flea.market.common.ForbiddenException;
 import com.flea.market.common.NotFoundException;
+import com.flea.market.user.Role;
 import com.flea.market.user.User;
 import com.flea.market.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -105,6 +107,55 @@ public class AdService {
             throw new NotFoundException("Ad not found: " + id);
         }
         return adMapper.toResponse(ad);
+    }
+
+    @Transactional
+    public AdResponse deactivate(Long id, String login) {
+        Ad ad = findById(id);
+        User requester = findUser(login);
+
+        if (ad.getAuthor().getLogin().equals(login)) {
+            if (requester.isBlocked()) {
+                throw new ForbiddenException("Blocked users cannot change ad status");
+            }
+            ad.setStatus(AdStatus.INACTIVE);
+        } else if (requester.getRole() == Role.ADMIN) {
+            ad.setStatus(AdStatus.INACTIVE);
+            ad.setAdminDeactivated(true);
+        } else {
+            throw new ForbiddenException("Only the author or an admin can deactivate the ad");
+        }
+
+        return adMapper.toResponse(adRepository.saveAndFlush(ad));
+    }
+
+    @Transactional
+    public AdResponse activate(Long id, String login) {
+        Ad ad = findById(id);
+        User requester = findUser(login);
+
+        if (ad.getAuthor().getLogin().equals(login)) {
+            if (requester.isBlocked()) {
+                throw new ForbiddenException("Blocked users cannot change ad status");
+            }
+            if (ad.isAdminDeactivated()) {
+                throw new ConflictException(
+                        "Ad was deactivated by an administrator and cannot be reactivated");
+            }
+            ad.setStatus(AdStatus.ACTIVE);
+        } else if (requester.getRole() == Role.ADMIN) {
+            ad.setStatus(AdStatus.ACTIVE);
+            ad.setAdminDeactivated(false);
+        } else {
+            throw new ForbiddenException("Only the author or an admin can activate the ad");
+        }
+
+        return adMapper.toResponse(adRepository.saveAndFlush(ad));
+    }
+
+    private User findUser(String login) {
+        return userRepository.findByLogin(login)
+                .orElseThrow(() -> new NotFoundException("User not found: " + login));
     }
 
     private void validatePrice(AdRequest request) {

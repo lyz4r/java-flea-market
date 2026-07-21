@@ -16,6 +16,7 @@ public record AdResponse(
         boolean priceIsNumeric,
         String priceText,
         AdStatus status,
+        boolean adminDeactivated,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {

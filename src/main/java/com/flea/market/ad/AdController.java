@@ -11,6 +11,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -66,6 +67,16 @@ public class AdController {
     @GetMapping("/{id}")
     public AdResponse getById(@PathVariable Long id, Principal principal) {
         return adService.getById(id, principal.getName());
+    }
+
+    @PatchMapping("/{id}/deactivate")
+    public AdResponse deactivate(@PathVariable Long id, Principal principal) {
+        return adService.deactivate(id, principal.getName());
+    }
+
+    @PatchMapping("/{id}/activate")
+    public AdResponse activate(@PathVariable Long id, Principal principal) {
+        return adService.activate(id, principal.getName());
     }
 
     private Pageable capPageSize(Pageable pageable) {

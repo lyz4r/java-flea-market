@@ -2,6 +2,7 @@ package com.flea.market.ad;
 
 import com.flea.market.ad.dto.AdRequest;
 import com.flea.market.ad.dto.AdResponse;
+import com.flea.market.common.ConflictException;
 import com.flea.market.common.ForbiddenException;
 import com.flea.market.common.NotFoundException;
 import com.flea.market.config.SecurityConfig;
@@ -31,6 +32,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -66,7 +68,7 @@ class AdControllerTest {
 
     private AdResponse response() {
         return new AdResponse(10L, 1L, "ivan", "Bike", "Almost new", "Transport",
-                new BigDecimal("15000.00"), true, null, AdStatus.ACTIVE,
+                new BigDecimal("15000.00"), true, null, AdStatus.ACTIVE, false,
                 LocalDateTime.now(), LocalDateTime.now());
     }
 
@@ -189,5 +191,46 @@ class AdControllerTest {
                         .with(httpBasic("ivan", "secret123")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Ad not found: 999"));
+    }
+
+    @Test
+    void deactivate_returnsOk() throws Exception {
+        stubAuth();
+        when(adService.deactivate(10L, "ivan")).thenReturn(response());
+
+        mockMvc.perform(patch("/api/ads/10/deactivate")
+                        .with(httpBasic("ivan", "secret123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(10));
+    }
+
+    @Test
+    void activate_returnsOk() throws Exception {
+        stubAuth();
+        when(adService.activate(10L, "ivan")).thenReturn(response());
+
+        mockMvc.perform(patch("/api/ads/10/activate")
+                        .with(httpBasic("ivan", "secret123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(10));
+    }
+
+    @Test
+    void activate_adminDeactivated_returnsConflict() throws Exception {
+        stubAuth();
+        when(adService.activate(10L, "ivan")).thenThrow(new ConflictException(
+                "Ad was deactivated by an administrator and cannot be reactivated"));
+
+        mockMvc.perform(patch("/api/ads/10/activate")
+                        .with(httpBasic("ivan", "secret123")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(
+                        "Ad was deactivated by an administrator and cannot be reactivated"));
+    }
+
+    @Test
+    void deactivate_unauthenticated_returnsUnauthorized() throws Exception {
+        mockMvc.perform(patch("/api/ads/10/deactivate"))
+                .andExpect(status().isUnauthorized());
     }
 }

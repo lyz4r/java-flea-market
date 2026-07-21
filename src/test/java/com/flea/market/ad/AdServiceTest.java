@@ -3,6 +3,7 @@ package com.flea.market.ad;
 import com.flea.market.ad.dto.AdRequest;
 import com.flea.market.ad.dto.AdResponse;
 import com.flea.market.common.BadRequestException;
+import com.flea.market.common.ConflictException;
 import com.flea.market.common.ForbiddenException;
 import com.flea.market.common.NotFoundException;
 import com.flea.market.user.Role;
@@ -89,7 +90,7 @@ class AdServiceTest {
         when(adMapper.toResponse(any(Ad.class))).thenReturn(
                 new AdResponse(10L, 1L, "ivan", request.title(), request.description(),
                         request.category(), request.price(), true, null,
-                        AdStatus.ACTIVE, LocalDateTime.now(), LocalDateTime.now()));
+                        AdStatus.ACTIVE, false, LocalDateTime.now(), LocalDateTime.now()));
 
         AdResponse result = adService.create(request, "ivan");
 
@@ -114,7 +115,7 @@ class AdServiceTest {
         when(adMapper.toResponse(any(Ad.class))).thenReturn(
                 new AdResponse(10L, 1L, "ivan", request.title(), request.description(),
                         request.category(), null, false, "договорная",
-                        AdStatus.ACTIVE, LocalDateTime.now(), LocalDateTime.now()));
+                        AdStatus.ACTIVE, false, LocalDateTime.now(), LocalDateTime.now()));
 
         AdResponse result = adService.create(request, "ivan");
 
@@ -161,7 +162,7 @@ class AdServiceTest {
         when(adMapper.toResponse(any(Ad.class))).thenReturn(
                 new AdResponse(10L, 1L, "ivan", request.title(), request.description(),
                         request.category(), request.price(), true, null,
-                        AdStatus.ACTIVE, ad.getCreatedAt(), LocalDateTime.now()));
+                        AdStatus.ACTIVE, false, ad.getCreatedAt(), LocalDateTime.now()));
 
         AdResponse result = adService.update(10L, request, "ivan");
 
@@ -213,7 +214,7 @@ class AdServiceTest {
         Page<Ad> page = new PageImpl<>(List.of(ad), PageRequest.of(0, 10), 1);
         when(adRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
         AdResponse response = new AdResponse(10L, 1L, "ivan", "Old title", "Old description",
-                "Old category", new BigDecimal("100.00"), true, null, AdStatus.ACTIVE,
+                "Old category", new BigDecimal("100.00"), true, null, AdStatus.ACTIVE, false,
                 ad.getCreatedAt(), ad.getCreatedAt());
         when(adMapper.toResponse(ad)).thenReturn(response);
 
@@ -231,7 +232,7 @@ class AdServiceTest {
         Page<Ad> page = new PageImpl<>(List.of(ad), PageRequest.of(0, 10), 1);
         when(adRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
         AdResponse response = new AdResponse(10L, 1L, "ivan", "Old title", "Old description",
-                "Old category", new BigDecimal("100.00"), true, null, AdStatus.INACTIVE,
+                "Old category", new BigDecimal("100.00"), true, null, AdStatus.INACTIVE, false,
                 ad.getCreatedAt(), ad.getCreatedAt());
         when(adMapper.toResponse(ad)).thenReturn(response);
 
@@ -246,7 +247,7 @@ class AdServiceTest {
         when(adRepository.findById(10L)).thenReturn(Optional.of(ad));
         when(adMapper.toResponse(ad)).thenReturn(
                 new AdResponse(10L, 1L, "ivan", "Old title", "Old description", "Old category",
-                        new BigDecimal("100.00"), true, null, AdStatus.ACTIVE,
+                        new BigDecimal("100.00"), true, null, AdStatus.ACTIVE, false,
                         ad.getCreatedAt(), ad.getCreatedAt()));
 
         AdResponse result = adService.getById(10L, "someone");
@@ -271,11 +272,159 @@ class AdServiceTest {
         when(adRepository.findById(10L)).thenReturn(Optional.of(ad));
         when(adMapper.toResponse(ad)).thenReturn(
                 new AdResponse(10L, 1L, "ivan", "Old title", "Old description", "Old category",
-                        new BigDecimal("100.00"), true, null, AdStatus.INACTIVE,
+                        new BigDecimal("100.00"), true, null, AdStatus.INACTIVE, false,
                         ad.getCreatedAt(), ad.getCreatedAt()));
 
         AdResponse result = adService.getById(10L, "ivan");
 
         assertThat(result.status()).isEqualTo(AdStatus.INACTIVE);
+    }
+
+    private User admin() {
+        return User.builder()
+                .id(99L)
+                .login("admin")
+                .name("Admin")
+                .email("admin@flea.market")
+                .passwordHash("hash")
+                .role(Role.ADMIN)
+                .blocked(false)
+                .build();
+    }
+
+    private void stubAdAndRequester(Ad ad, User requester) {
+        when(adRepository.findById(10L)).thenReturn(Optional.of(ad));
+        when(userRepository.findByLogin(requester.getLogin())).thenReturn(Optional.of(requester));
+        when(adRepository.saveAndFlush(any(Ad.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(adMapper.toResponse(any(Ad.class))).thenAnswer(inv -> {
+            Ad saved = inv.getArgument(0);
+            return new AdResponse(saved.getId(), 1L, "ivan", saved.getTitle(),
+                    saved.getDescription(), saved.getCategory(), saved.getPrice(),
+                    saved.isPriceIsNumeric(), saved.getPriceText(), saved.getStatus(),
+                    saved.isAdminDeactivated(), saved.getCreatedAt(), saved.getCreatedAt());
+        });
+    }
+
+    @Test
+    void deactivate_byAuthor_setsInactive_keepsFlag() {
+        User author = author();
+        Ad ad = existingAd(author);
+        stubAdAndRequester(ad, author);
+
+        AdResponse result = adService.deactivate(10L, "ivan");
+
+        assertThat(result.status()).isEqualTo(AdStatus.INACTIVE);
+        assertThat(result.adminDeactivated()).isFalse();
+    }
+
+    @Test
+    void deactivate_byBlockedAuthor_throwsForbidden() {
+        User author = author();
+        author.setBlocked(true);
+        Ad ad = existingAd(author);
+        when(adRepository.findById(10L)).thenReturn(Optional.of(ad));
+        when(userRepository.findByLogin("ivan")).thenReturn(Optional.of(author));
+
+        assertThatThrownBy(() -> adService.deactivate(10L, "ivan"))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    void deactivate_byAdmin_setsInactiveAndFlag() {
+        Ad ad = existingAd(author());
+        stubAdAndRequester(ad, admin());
+
+        AdResponse result = adService.deactivate(10L, "admin");
+
+        assertThat(result.status()).isEqualTo(AdStatus.INACTIVE);
+        assertThat(result.adminDeactivated()).isTrue();
+    }
+
+    @Test
+    void deactivate_byOtherUser_throwsForbidden() {
+        Ad ad = existingAd(author());
+        User other = author();
+        other.setLogin("someone");
+        when(adRepository.findById(10L)).thenReturn(Optional.of(ad));
+        when(userRepository.findByLogin("someone")).thenReturn(Optional.of(other));
+
+        assertThatThrownBy(() -> adService.deactivate(10L, "someone"))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    void activate_byAuthor_setsActive() {
+        User author = author();
+        Ad ad = existingAd(author);
+        ad.setStatus(AdStatus.INACTIVE);
+        stubAdAndRequester(ad, author);
+
+        AdResponse result = adService.activate(10L, "ivan");
+
+        assertThat(result.status()).isEqualTo(AdStatus.ACTIVE);
+    }
+
+    @Test
+    void activate_byAuthor_adminDeactivated_throwsConflict() {
+        User author = author();
+        Ad ad = existingAd(author);
+        ad.setStatus(AdStatus.INACTIVE);
+        ad.setAdminDeactivated(true);
+        when(adRepository.findById(10L)).thenReturn(Optional.of(ad));
+        when(userRepository.findByLogin("ivan")).thenReturn(Optional.of(author));
+
+        assertThatThrownBy(() -> adService.activate(10L, "ivan"))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("administrator");
+    }
+
+    @Test
+    void activate_byBlockedAuthor_throwsForbidden() {
+        User author = author();
+        author.setBlocked(true);
+        Ad ad = existingAd(author);
+        ad.setStatus(AdStatus.INACTIVE);
+        when(adRepository.findById(10L)).thenReturn(Optional.of(ad));
+        when(userRepository.findByLogin("ivan")).thenReturn(Optional.of(author));
+
+        assertThatThrownBy(() -> adService.activate(10L, "ivan"))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    void activate_byAdmin_setsActive_clearsFlag() {
+        Ad ad = existingAd(author());
+        ad.setStatus(AdStatus.INACTIVE);
+        ad.setAdminDeactivated(true);
+        stubAdAndRequester(ad, admin());
+
+        AdResponse result = adService.activate(10L, "admin");
+
+        assertThat(result.status()).isEqualTo(AdStatus.ACTIVE);
+        assertThat(result.adminDeactivated()).isFalse();
+    }
+
+    @Test
+    void activate_byOtherUser_throwsForbidden() {
+        Ad ad = existingAd(author());
+        ad.setStatus(AdStatus.INACTIVE);
+        User other = author();
+        other.setLogin("someone");
+        when(adRepository.findById(10L)).thenReturn(Optional.of(ad));
+        when(userRepository.findByLogin("someone")).thenReturn(Optional.of(other));
+
+        assertThatThrownBy(() -> adService.activate(10L, "someone"))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    void activate_alreadyActive_idempotent() {
+        User author = author();
+        Ad ad = existingAd(author);
+        stubAdAndRequester(ad, author);
+
+        AdResponse result = adService.activate(10L, "ivan");
+
+        assertThat(result.status()).isEqualTo(AdStatus.ACTIVE);
     }
 }
