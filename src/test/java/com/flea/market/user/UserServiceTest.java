@@ -103,4 +103,59 @@ class UserServiceTest {
         assertThatThrownBy(() -> userService.getById(42L))
                 .isInstanceOf(NotFoundException.class);
     }
+
+    @Test
+    void block_regularUser_setsBlocked() {
+        User user = User.builder()
+                .id(2L).login("ivan").name("Ivan").email("ivan@example.com")
+                .passwordHash("hash").role(Role.USER).blocked(false).build();
+        when(userRepository.findById(2L)).thenReturn(Optional.of(user));
+        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        UserResponse expected = new UserResponse(2L, "ivan", "Ivan", "ivan@example.com",
+                Role.USER, true, null);
+        when(userMapper.toResponse(user)).thenReturn(expected);
+
+        UserResponse result = userService.block(2L);
+
+        assertThat(user.isBlocked()).isTrue();
+        assertThat(result.blocked()).isTrue();
+    }
+
+    @Test
+    void block_admin_throwsConflict() {
+        User admin = User.builder()
+                .id(1L).login("admin").name("Admin").email("admin@flea.market")
+                .passwordHash("hash").role(Role.ADMIN).blocked(false).build();
+        when(userRepository.findById(1L)).thenReturn(Optional.of(admin));
+
+        assertThatThrownBy(() -> userService.block(1L))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("Admin");
+        assertThat(admin.isBlocked()).isFalse();
+    }
+
+    @Test
+    void block_notFound_throwsNotFound() {
+        when(userRepository.findById(42L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.block(42L))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void unblock_blockedUser_clearsBlocked() {
+        User user = User.builder()
+                .id(2L).login("ivan").name("Ivan").email("ivan@example.com")
+                .passwordHash("hash").role(Role.USER).blocked(true).build();
+        when(userRepository.findById(2L)).thenReturn(Optional.of(user));
+        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        UserResponse expected = new UserResponse(2L, "ivan", "Ivan", "ivan@example.com",
+                Role.USER, false, null);
+        when(userMapper.toResponse(user)).thenReturn(expected);
+
+        UserResponse result = userService.unblock(2L);
+
+        assertThat(user.isBlocked()).isFalse();
+        assertThat(result.blocked()).isFalse();
+    }
 }

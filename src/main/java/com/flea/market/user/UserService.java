@@ -52,4 +52,21 @@ public class UserService {
         return userRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("User not found: " + id));
     }
+
+    @Transactional
+    public UserResponse block(Long id) {
+        User user = findById(id);
+        if (user.getRole() == Role.ADMIN) {
+            throw new ConflictException("Admin users cannot be blocked");
+        }
+        user.setBlocked(true);
+        return userMapper.toResponse(userRepository.saveAndFlush(user));
+    }
+
+    @Transactional
+    public UserResponse unblock(Long id) {
+        User user = findById(id);
+        user.setBlocked(false);
+        return userMapper.toResponse(userRepository.saveAndFlush(user));
+    }
 }

@@ -29,6 +29,8 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
+                        .requestMatchers(HttpMethod.PATCH, "/api/users/*/block", "/api/users/*/unblock")
+                        .hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .httpBasic(basic -> basic.authenticationEntryPoint((request, response, authException) ->
                         response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")));
