@@ -1,0 +1,8 @@
+ALTER TABLE ads
+    ADD COLUMN category VARCHAR(128) NOT NULL DEFAULT '';
+
+ALTER TABLE ads
+    ALTER COLUMN category DROP DEFAULT;
+
+ALTER TABLE ads
+    ADD CONSTRAINT chk_ads_status CHECK (status IN ('ACTIVE', 'INACTIVE'));
